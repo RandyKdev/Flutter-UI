@@ -1,7 +1,10 @@
 import 'package:books_app/providers/book.dart';
+import 'package:books_app/providers/chat/chat.dart';
 import 'package:books_app/providers/user.dart';
+import 'package:books_app/services/auth.dart';
 import 'package:books_app/utils/location_helper.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class DatabaseService {
   final String uid;
@@ -78,47 +81,6 @@ class DatabaseService {
     }).toList();
   }
 
-  // Stream<QuerySnapshot> getMessageStream(String from, String to) {
-  //   return chatCollection
-  //       .doc(from)
-  //       .collection('conversation')
-  //       .doc(to)
-  //       .collection('messages')
-  //       .orderBy('createdAt', descending: false) //
-  //       .snapshots();
-  //   // .map(_messageFromSnapshot);
-  // }
-
-
-
-  // Future<DocumentReference> sendMessage(Message message) async {
-  //   // final newMessage = Message(
-  //   //   from: myUID,
-  //   //   to: receiverUID,
-  //   //   message: message,
-  //   //   createdAt: DateTime.now(),
-  //   // );
-
-  //   //Sender sends a message
-  //   return chatCollection
-  //       .doc(message.sender)
-  //       .collection('conversation')
-  //       .doc(message.receiver)
-  //       .collection('messages')
-  //       .add(<String, dynamic>{
-  //     'sender': message.sender,
-  //     'receiver': message.receiver,
-  //     'message': message.message,
-  //     'createdAt': message.createdAt
-  //   });
-  //   // Message(
-  //   //   sender: doc.data()['sender'],
-  //   //   receiver: doc.data()['receiver'],
-  //   //   message: doc.data()['message'],
-  //   //   createdAt: doc.data()['createdAt'],
-  //   // );
-  //   //update receiver inbox
-  // }
   void removeBook(String isbn) {
     booksCollection
         .doc(uid)
@@ -127,6 +89,7 @@ class DatabaseService {
         .delete()
         .catchError((dynamic e) => print(e.toString()));
   }
+
   Future<void> updateBookMark(Book book) async {
     //Get
     print("Hello there");
@@ -134,11 +97,8 @@ class DatabaseService {
     final DocumentReference docReference =
         booksCollection.doc(uid).collection('ownedBooks').doc(book.isbn);
     docReference.update(<String, dynamic>{
-          'isBookMarked': book.isBookMarked,
-        }
-
-    );
-
+      'isBookMarked': book.isBookMarked,
+    });
   }
 
   Future<void> updateGenres(List<String> genres) async {
@@ -262,5 +222,57 @@ class DatabaseService {
     );
   }
 
+  Future<DocumentReference> createChat(String participatingUserId) {
+    final FirebaseAuthService _auth = FirebaseAuthService();
+    final String _uid = _auth.getUID;
+    return chatCollection.add(<String, dynamic>{
+      'users': [participatingUserId, _uid],
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Stream<QuerySnapshot> getAllChats() {
+    final FirebaseAuthService _auth = FirebaseAuthService();
+    final String _uid = _auth.getUID;
+    return chatCollection
+        .where('users', arrayContains: _uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
+  Stream<QuerySnapshot> getAllMessagesFromChat(String chatId) {
+    return chatCollection
+        .doc(chatId)
+        .collection('messages')
+        .orderBy('createdAt')
+        .snapshots();
+  }
+
+  // todo: Handle the delivered and seen cases
+
+  Future<String> getChatParticipatingUserID(String chatId) async {
+    final DocumentSnapshot _chat = await chatCollection.doc(chatId).get();
+    final List<String> _users = _chat.data()['users'] as List<String>;
+    final FirebaseAuthService _auth = FirebaseAuthService();
+    final String _uid = _auth.getUID;
+    return _users[1 - _users.indexOf(_uid)];
+  }
+
+  Future<DocumentReference> sendMessage(String chatId, String message) async {
+    final FirebaseAuthService _auth = FirebaseAuthService();
+    final String _sender = _auth.getUID;
+    final String _receiver = await getChatParticipatingUserID(chatId);
+    return chatCollection
+        .doc(chatId)
+        .collection('messages')
+        .add(<String, dynamic>{
+      'message': message,
+      'sender': _sender,
+      'receiver': _receiver,
+      'createdAt': FieldValue.serverTimestamp(),
+      'delivered': false,
+      'seen': false,
+    });
+  }
   //**End of DB service
 }
