@@ -12,16 +12,4 @@ class Message {
     this.delivered,
     this.seen,
   });
-
-  bool get getSeenStatus {
-    return seen;
-  }
-
-  bool get getDeliveredStatus {
-    return delivered;
-  }
-
-  String get getMessage {
-    return message;
-  }
 }

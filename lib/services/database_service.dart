@@ -222,6 +222,8 @@ class DatabaseService {
     );
   }
 
+  // DB services for chat begins here
+
   Future<DocumentReference> createChat(String participatingUserId) {
     final FirebaseAuthService _auth = FirebaseAuthService();
     final String _uid = _auth.getUID;
@@ -240,6 +242,15 @@ class DatabaseService {
         .snapshots();
   }
 
+  Stream<QuerySnapshot> getLastMessageFromChat(String chatId) {
+    return chatCollection
+        .doc(chatId)
+        .collection('messages')
+        .orderBy('createdAt', descending: true)
+        .limit(1)
+        .snapshots();
+  }
+
   Stream<QuerySnapshot> getAllMessagesFromChat(String chatId) {
     return chatCollection
         .doc(chatId)
@@ -248,7 +259,29 @@ class DatabaseService {
         .snapshots();
   }
 
-  // todo: Handle the delivered and seen cases
+  Future<void> updateMessageToDelivered(QueryDocumentSnapshot message) async {
+    await message.reference.update(<String, dynamic>{
+      'delivered': true,
+    });
+  }
+
+  Future<void> updateMessageToSeen(QueryDocumentSnapshot message) async {
+    await message.reference.update(<String, dynamic>{
+      'seen': true,
+    });
+  }
+
+  Future<void> setChatMessagesToDelivered(String chatId) async {
+    final FirebaseAuthService _auth = FirebaseAuthService();
+    final String _uid = _auth.getUID;
+    final QuerySnapshot messages = await chatCollection
+        .doc(chatId)
+        .collection('messages')
+        .where('delivered', isEqualTo: false)
+        .where('receiver', isEqualTo: _uid)
+        .get();
+    messages.docs.forEach(updateMessageToDelivered);
+  }
 
   Future<String> getChatParticipatingUserID(String chatId) async {
     final DocumentSnapshot _chat = await chatCollection.doc(chatId).get();
@@ -258,7 +291,7 @@ class DatabaseService {
     return _users[1 - _users.indexOf(_uid)];
   }
 
-  Future<DocumentReference> sendMessage(String chatId, String message) async {
+  Future<DocumentReference> sendMessage({String chatId, String message}) async {
     final FirebaseAuthService _auth = FirebaseAuthService();
     final String _sender = _auth.getUID;
     final String _receiver = await getChatParticipatingUserID(chatId);
