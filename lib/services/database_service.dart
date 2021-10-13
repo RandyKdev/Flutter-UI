@@ -303,6 +303,7 @@ class DatabaseService {
     return chatCollection.add(<String, dynamic>{
       'users': [participatingUserId, _uid],
       'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
     });
   }
 
@@ -311,7 +312,7 @@ class DatabaseService {
     final String _uid = _auth.getUID;
     return chatCollection
         .where('users', arrayContains: _uid)
-        .orderBy('createdAt', descending: true)
+        .orderBy('updatedAt', descending: true)
         .snapshots();
   }
 
@@ -333,13 +334,13 @@ class DatabaseService {
   }
 
   Future<void> updateMessageToDelivered(QueryDocumentSnapshot message) async {
-    await message.reference.update(<String, dynamic>{
+    await message.reference.update(<String, bool>{
       'delivered': true,
     });
   }
 
   Future<void> updateMessageToSeen(QueryDocumentSnapshot message) async {
-    await message.reference.update(<String, dynamic>{
+    await message.reference.update(<String, bool>{
       'seen': true,
     });
   }
@@ -368,6 +369,9 @@ class DatabaseService {
     final FirebaseAuthService _auth = FirebaseAuthService();
     final String _sender = _auth.getUID;
     final String _receiver = await getChatParticipatingUserID(chatId);
+    await chatCollection.doc(chatId).update(<String, FieldValue>{
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
     return chatCollection
         .doc(chatId)
         .collection('messages')
